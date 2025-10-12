@@ -1,7 +1,7 @@
 ---
 title: "Psych 251 PS2: Tidying Data"
-author: "Andrew Lampinen"
-date: "September 27, 2018"
+author: "Morgan Tompkins"
+date: "October 11, 2025"
 format:
   html:
     toc: true
@@ -50,11 +50,13 @@ And see if you can figure out what range the likert scores are in. What's the hi
 
 ```{r}
 ## your code here
-
+d %>%
+  select(Game1Angry1) %>%
+  range(na.rm = TRUE)
 ```
 
-Highest number: [Your answer here]
-Lowest number: [Your answer here]
+Highest number: [1]
+Lowest number: [7]
 
 # cleaning up a bit
 
@@ -79,8 +81,19 @@ Notice that participant 23 has missing values for part 1.
 The researchers have made a column called `DoNotUse` based on their exclusion criteria. Use this column to filter the dataframe! (hint: this is a little trickier than it might be because of how R treats NA values. You may want to use `?unique` to check values in the column and check out `?is.na`.)
 
 ```{r}
-filtered_d = d %>% 
-  filter(   ) # your code here: exclude subjects that are marked as "DoNotUse"
+d %>%
+  group_by(DoNotUse) %>%
+  summarize(n = n()) # there are three entries marked as DoNotUse. Which ones?
+
+d %>%
+  filter(DoNotUse == 1) %>%
+  select(Subject, DoNotUse)
+  
+
+filtered_d <- d %>% 
+  filter(is.na(DoNotUse)) # your code here: exclude subjects that are marked as "DoNotUse"
+
+nrow(d) - nrow(filtered_d) # check
 ```
 
 It's good practice to assign a new variable name (in this case `filtered_d`) to a data frame when you change it in an important way, or apply a code chunk that shouldn't be run twice. This helps prevent you seeing different results when you run your code in chunks (and might run one multiple times, or skip it, etc.) vs. knit the document.
@@ -117,7 +130,9 @@ Now you try! Fill in the selection criteria to get rid of the "Game" columns, wh
 
 ```{r}
 performance_hyp_d = filtered_d %>% 
-  select( ) # your code here: remove the columns containing "Game" in the name
+  select(-contains("Game") ) # your code here: remove the columns containing "Game" in the name
+
+names(performance_hyp_d)
 ```
 
 # Converting to long form
@@ -158,6 +173,9 @@ And you can convert the rating dataset! (Call the "Key" column "Measurement" and
 ```{r}
 rating_hyp_long_d = rating_hyp_d %>%
   ## your code here
+  pivot_longer(cols = -c("Subject", "Cond"),
+               names_to = "Measurement",
+               values_to = "Rating")
 
 head(rating_hyp_long_d)
 ```
@@ -179,8 +197,10 @@ Now you can help! For the rating dataset, write a test on a measurement name, us
 ```{r}
 rating_hyp_long_d = rating_hyp_long_d %>%
   mutate(
-    IsRecall = ,## Your code here
+    IsRecall = grepl("Friends|Strangers", Measurement),## Your code here
   )
+
+rating_hyp_long_d
 ```
 
 Here are a couple other useful ways of manipulating columns. (You won't remember all the functions you see here now, but that's okay. You can always reference this tutorial later if there's something you need to figure out how to do.)
@@ -226,8 +246,10 @@ performance_hyp_long_d = performance_hyp_long_d %>%
 The rating hypothesis analysis also requires some grouped manipulation. The experimenters collected repeated measures on ratings in each emotion category and each music/recall category from each game. For this analysis, they averaged all the ratings over the following two variables: the given emotion and the game type, to produce a nice summary. Your job is to implement this, calling the new variable MeanRating, and save the summarized data in a new data frame called `rating_summary_d`. (Hint: use a `group_by` and a `summarize`.)
 
 ```{r}
+## your code here
 rating_summary_d = rating_hyp_long_d %>% 
-  ## your code here
+  group_by(ConfrontationalGame, Emotion) %>%
+  summarise(MeanRating = mean(Rating, na.rm = TRUE))
 ```
 
 Let's take a look at the result:
@@ -281,6 +303,10 @@ Now we're finally to reproduce Fig. 2 from Tamir et al., we just need to get the
 ```{r}
 performance_diff_summary_d = performance_diff_d %>%
   ## Your code here
+  group_by(ConfrontationalGame, MusicCondition) %>%
+  summarise(
+    MeanImprovementScore = mean(ImprovementScore, na.rm = TRUE)
+  )
 ```
 
 Let's take a look at your result (if it has `NA` values, how can you fix it?):
@@ -298,6 +324,27 @@ ggplot(performance_diff_summary_d, aes(x=ConfrontationalGame, y=MeanImprovementS
 ```
 
 (Bonus: also calculate the SEM in the summary data, and then add errorbars to the plot with `geom_errorbar`!)
+
+```{r add-errobars}
+# Add SEM
+perforamance_dff_SEM_d <- performance_diff_d %>%
+  group_by(ConfrontationalGame, MusicCondition) %>%
+  summarise(
+    MeanImprovementScore = mean(ImprovementScore, na.rm = TRUE),
+    SEM = sd(ImprovementScore, na.rm = TRUE) / sqrt(sum(!is.na(ImprovementScore)))
+  )
+
+# Plot SEM
+ggplot(perforamance_dff_SEM_d, 
+       aes(x = ConfrontationalGame, 
+           y = MeanImprovementScore, 
+           fill = MusicCondition)) +
+  geom_bar(position="dodge", stat="identity") + 
+  scale_fill_brewer(palette="Set1") +
+  geom_errorbar(aes(ymin = MeanImprovementScore - SEM, 
+                    ymax = MeanImprovementScore + SEM),
+                position = position_dodge()) 
+```
 
 Not quite as exact a replication of the effect as Fig. 1. This concurs with the [replication report](https://osf.io/7i2tf/), which says that the hypothesis 1 effect replicated, but hypothesis 2 did not. Here's a model just for thoroughness (again, don't worry too much about it):
 
